@@ -1,0 +1,20 @@
+run_collect_unlock_and_download.bat
+Nó sẽ:
+
+* chạy script trên PXE
+* đi từng slot
+* vào GP card
+* copy nguyên folder /tmp/GP_CARD_SN
+* gom vào PXE:
+/home/qsitoan/April20_unlock
+roi download ve: C:\Users\QSI-LOANER-4233\Desktop\RMA_GPCARD\KeyManClient\April20_unlock
+
+
+
+Step 2: manually download to 
+C:\Users\QSI-LOANER-4233\Desktop\RMA_GPCARD\KeyManClient\April20_unlock
+
+
+sign_all_and_upload.bat
+
+

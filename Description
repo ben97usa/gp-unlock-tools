@@ -1,0 +1,921 @@
+Bay gio toi se noi ro nhung viec ma toi can lam, GP Card la GlacierPeak Card, GP card hien dang locked, toi bay gio can unlock no, sau do toi se config de no co the boot pxe, sau do toi se vao console cua GP card de disable firewall, add public key ssh, va cuoi cung la export csr va token tu GP card ra. De lam duoc viec do, toi co 1 script python (unlock_gp.py) de tu dong hoa toan bo quy trinh do. Script se doc MAC address tu file, tim IP tu MAC, ssh vao Rack Manager, lay thong tin slot server, thay doi che do boot sang PXE, reset server, dang nhap vao console GP qua serial port, thuc hien cac cau lenh trong GP de disable firewall va add public key, va cuoi cung la xuat CSR va token ra. Neu co slot nao bi loi trong qua trinh thi se duoc ghi lai de sau nay xem lai. Sau day la code cua script unlock_gp.py ma toi da viet san sang su dung.
+
+Sau khi generate ra duoc GP_CARD_SN thi trong thu vien /tmp/GP_CARD_SN se co 3 file: GP_CARD_SN.CSR, token.bin, va cert_0.der to cert_3.der. Thi bay gio toi script thu 2 (collect_csr_to_pxe.py) se duoc su dung de tu dong SCP thu vien /tmp/GP_CARD_SN tu GP card len may chu PXE, vao thu muc /home/qsitoan/April19_unlock/GP_CARD_SN. Script se doc MAC address tu file, tim IP tu MAC, lay thong tin slot server, dang nhap vao console GP qua serial port, kiem tra thu muc /tmp/GP_CARD_SN co ton tai hay khong, neu co thi se SCP to PXE, neu khong thi ghi lai loi. Cuoi cung se in ra ten thu muc chua cac file da duoc copy len PXE.
+after we scp everything to our PXE at folder P20265082094308E. We will have like this:
+/home/qsitoan/GP_CARD_SN
+└── P20265082094308E/
+    ├── token.bin
+    ├── cert_0.der
+    ├── cert_1.der
+    ├── cert_2.der
+    └── cert_3.der
+
+---------
+
+Now we will scp to our local drive
+Create a folder and copy whole path
+Change directory:
+
+cd "C:\Users\QSI-LOANER-4233\Desktop\RMA_GPCARD\KeyManClient"
+scp folder P20265082094308E to our local drive
+scp -r qsitoan@192.168.202.50:/home/qsitoan/GP_CARD_SN/P20265082094308E .
+
+C:\Users\QSI-LOANER-4233\Desktop\RMA_GPCARD\
+└── KeyManClient\
+    └── P20265082094308E\
+        ├── token.bin
+        ├── cert_0.der
+        ├── cert_1.der
+        ├── cert_2.der
+        └── cert_3.der
+
+O PXE, toi co the tu minh download folder ...April19_unlock/GP_CARD_SN ve may. Sau do toi can gui CSRs cho Microsoft de dang ky. Sau khi Microsoft approved. O trong local drive cua toi, co mot folder la KeyMainClient, trong do toi phai toi se co mot script khac, script do se tu dong lay signed_token.bin. 
+
+PS C:\Users\QSI-LOANER-4233\Desktop\RMA_GPCARD> cd .\KeyManClient
+# .\sign.bat [GPCARDSN]. sign.bat is a script that automatic grab signed_token 
+PS C:\Users\QSI-LOANER-4233\Desktop\RMA_GPCARD\KeyManClient> .\sign.bat P20265066079908E
+# after run this script it will redirect us to web browser, we will need to login our company account that have been approved by microsoft and HSMK
+# then we cd to GPCARDSN folder, we will see 342 signed_token.bin. This file we will transfer to GP Card port 8295
+
+PS C:\Users\QSI-LOANER-4233\Desktop\RMA_GPCARD\KeyManClient> cd P20265066079908E
+PS C:\Users\QSI-LOANER-4233\Desktop\RMA_GPCARD\KeyManClient\P20265066079908E> ls
+
+    Directory: C:\Users\QSI-LOANER-4233\Desktop\RMA_GPCARD\KeyManClient\P20265066079908E
+
+
+Mode                 LastWriteTime         Length Name
+----                 -------------         ------ ----
+-a----         4/10/2026   1:12 PM            775 cert_0.der
+-a----         4/10/2026   1:12 PM           1419 cert_1.der
+-a----         4/10/2026   1:12 PM           1076 cert_2.der
+-a----         4/10/2026   1:12 PM            550 cert_3.der
+-a----         4/10/2026   2:53 PM            342 signed_token.bin
+-a----         4/10/2026   1:12 PM            138 token.bin
+
+# We successfully get signed_token.bin
+# signed_token.bin needs to be transfer to our PXE library
+PS C:\Users\QSI-LOANER-4233\Desktop\RMA_GPCARD\KeyManClient\P20265066079908E> scp signed_token.bin qsitoan@192.168.202.50:/home/RMA_GPCARD/signed_token
+qsitoan@192.168.202.50's password:
+
+signed_token.bin                                 
+                                                                                                         100%  342    18.6KB/s   00:00
+
+
+
+Sau khi trong moi GP_CARD_SN tai local drive cua toi dieu co signed_token.bin, toi se se muon mot script tu dong up load nhung foler GP_CARD_SN(trong moi GP_CARD_SN co signed_token.bin) len PXE. 
+
+Va luc nay se lai co mot script khac, tu dong vao PXE cua toi lay signed_token.bin trong GP_CARD_SN roi sau do vao ngay Rack, roi vao tung slot login vao GP CARD sau do check /tmp/GP_CARD_SN co ton tai hay khong, neu co thi se so xem GP_CARD_SN la so nao, sau do quay ve PXE lay file signed_token.bin trong thu muc GP_CARD_SN tuong ung roi sau do SCP vao GP CARD. sau do chay ovb_lock policy get /tmp/policy.bin, # Case 1:
+# "0x7f000100 error"
+# → Card is LOCKED
+
+# Case 2:
+# Policy=0x2 STOS Keys allowed
+# → Card is LOCKED (ready to unlock)
+
+Bay gio la run Unlock ovb_lock policy set /tmp/signed_token.bin
+sau do verify voi ovb_lock policy get /tmp/policy.bin neu output Policy=0x2 la unlocked thanh cong. sau do se print ra man hinh "GP CARD {GP_CARD_SN} + slot unlocked successfully" neu thanh cong, neu khong thi se print "Failed to unlock GP CARD {GP_CARD_SN} + slot" va ghi lai file log.
+
+cu the tiep tuc qua lap lai cho nhung node khac, cuoi cung se print ra bao cao slot nao da unlock thanh cong, slot nao that bai va ly do.
+
+
+
+
+============
+Script này (unlock_gp.py) là một công cụ tự động hóa để "mở khóa" và cấu hình các card GP (Graphics Processor) trong hệ thống quản lý rack server (RSCM - Rack Scale Compute Manager). Nó thực hiện các bước chính sau một cách tuần tự và chi tiết:
+
+Bước chuẩn bị:
+Đọc địa chỉ MAC của RM (Rack Manager) từ file RM_MAC.txt.
+Sử dụng công cụ find_ip để tìm địa chỉ IP của RM dựa trên MAC.
+Kết nối SSH vào RM bằng mật khẩu cố định ($pl3nd1D).
+Thu thập thông tin:
+Lấy danh sách các slot server đang hoạt động (loại "Server" với mã hoàn thành "Success") từ lệnh show manager info.
+Với mỗi slot, thu thập thông tin GP (bao gồm địa chỉ MAC) qua lệnh show system info.
+Chuẩn bị boot PXE:
+Chuyển đổi định dạng MAC để tạo tên file boot tùy chỉnh.
+Kiểm tra hoặc tạo file cấu hình PXE trong thư mục /tftpboot/pxelinux.cfg/, đảm bảo tham chiếu đến image MOS (firmware/t6t/gp/Image_rsa_mos.img).
+Khởi động lại và cấu hình GP:
+Thay đổi chế độ boot của server thành PXE (loại 2).
+Reset (DC cycle) server để áp dụng thay đổi.
+Đăng nhập vào console GP qua phiên serial (port 8295).
+Trong GP: Tắt firewall, thêm khóa công khai SSH, kiểm tra ping đến gateway (10.0.3.254).
+Thu thập khóa:
+Tạo thư mục tạm thời và xuất CSR (Certificate Signing Request), token, và chuỗi chứng chỉ từ GP bằng các lệnh cerberus_utility.
+Kết thúc:
+Thoát khỏi console GP và RM.
+Báo cáo các slot thất bại (nếu có).
+Script này giúp tự động hóa quy trình unlock GP để chuẩn bị cho việc boot qua mạng và trích xuất khóa bảo mật, thường dùng trong môi trường server Quanta. Nó xử lý lỗi, timeout, và cho phép người dùng bỏ qua slot nếu cần.
+
+=> Unlock_Gp.py
+#!/usr/bin/env python3
+import re
+import subprocess
+import threading
+import select
+import sys
+import time
+import os
+import shutil
+
+import pexpect
+
+MAC_FILE = "./RM_MAC.txt"
+SSH_PASSWORD = "$pl3nd1D"
+FIND_IP = "/usr/local/bin/find_ip"
+RSCM_SHOW_MANAGER_INFO = "show manager info"
+TFTPBOOT_DIRECTORY = "/tftpboot/pxelinux.cfg"
+MOS_CUST_IMAGE = "/tftpboot/pxelinux.cfg/t6t_MOS"
+MOS_IMAGE = "firmware/t6t/gp/Image_rsa_mos.img"
+PUBLIC_KEY = ""
+
+# ---------------------------------------------------
+# Utility: run command and capture output
+# ---------------------------------------------------
+def run(cmd):
+    try:
+        return subprocess.check_output(
+            cmd, stderr=subprocess.STDOUT, shell=True, text=True
+        )
+    except subprocess.CalledProcessError:
+        return ""
+
+def get_mac_from_file(filepath):
+    with open(filepath, "r") as f:
+        mac = f.read().strip()
+    return mac
+
+def find_ip(mac):
+    output = run(f"{FIND_IP} {mac}")
+    m = re.search(r"(\d+\.\d+\.\d+\.\d+)", output)
+    return m.group(1) if m else None
+
+def conv_mac_format(mac):
+    if "MacAddress:" in mac:
+        extr_mac = mac.split("MacAddress:")[1].strip()
+        return "01-" + extr_mac.replace(":", "-").lower()
+    
+def check_custom_bootimage(filepath, fielname):
+    filepath = os.path.join(filepath, fielname)
+    if os.path.isfile(filepath):
+        print(f"File '{filepath}' exists.")
+
+        with open(filepath, "r") as f:
+            content = f.read()
+
+        if MOS_IMAGE in content:
+            print(f"   ✅ Found MOS image reference in '{filepath}'")
+        else:
+            print(f"   ⚠️  MOS image reference NOT found in '{filepath}'")
+            shutil.copy(MOS_CUST_IMAGE, filepath)
+            print(f"   → Updated: {filepath} with MOS image reference")
+    else:
+        print(f"File '{filepath}' does not exist.")
+        shutil.copy(MOS_CUST_IMAGE, filepath)
+        print(f"Created: {filepath}")
+
+def get_server_slots(rm_manager_info_output):
+    server_slots = []
+
+    for line in rm_manager_info_output.splitlines():
+        line = line.strip()
+
+        # Skip header / separators
+        if not line.startswith("|"):
+            continue
+        if "Port State" in line:
+            continue
+
+        # Split columns
+        parts = [p.strip() for p in line.split("|") if p.strip()]
+
+        # Expect at least 6 columns
+        if len(parts) < 6:
+            continue
+
+        slot = parts[0]
+        port_type = parts[3]
+        completion_code = parts[6]
+
+        if port_type == "Server" and completion_code == "Success":
+            server_slots.append(int(slot))
+
+    return server_slots
+
+def exec_cmd(ip, slot, action, extra=None):
+    if action == "vreset":
+        cmd = f"set system vreset -i {slot}"
+    elif action == "reset":
+        cmd = f"set system reset -i {slot}"
+    elif action == "gp_info":
+        cmd = f"show system info -i {slot} -b 1"
+    elif action == "boot_mode":
+        cmd = f"set system boot -i {slot} -b 1 -t {extra}"
+    else:
+        cmd = f'set system cmd -i {slot} -c {extra}'
+
+    ssh_cmd = [
+        "sshpass", "-p", SSH_PASSWORD, "ssh",
+        "-o", "StrictHostKeyChecking=no",
+        "-o", "UserKnownHostsFile=/dev/null",
+        f"root@{ip}",
+        cmd
+    ]
+
+    print(f"Command:", cmd)
+    # print("   → Executing command... please wait...(This may take up to 90 seconds depending on RSCM load)")
+
+    try:
+        # Use Popen so we don't freeze
+        proc = subprocess.Popen(
+            ssh_cmd,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            text=True
+        )
+
+        full_output = ""
+
+        # Stream output line by line
+        for line in proc.stdout:
+            line = line.rstrip()
+            full_output += line + "\n"
+            if "Completion Code:" in line:
+                print(line)
+            if "MacAddress:" in line:
+                print(line)
+
+        proc.wait()  # ensure completion
+
+    except Exception as e:
+        print(f"   ❌ SSH execution failed: {e}")
+        return False
+
+    # Detect completion code
+    return "Completion Code: Success" in full_output, full_output
+
+def exec_cmd_with_timeout_and_skip(ip, slot, action, extra, timeout=60):
+    """
+    Run exec_cmd() with:
+      - timeout
+      - ability for user to skip to next IP by pressing ENTER.
+    """
+
+    result_holder = {"done": False, "success": False}
+
+    def run_cmd():
+        ok = exec_cmd(ip, slot, action, extra)
+        result_holder["done"] = True
+        result_holder["success"] = ok
+
+    # Run SSH command in separate thread
+    t = threading.Thread(target=run_cmd)
+    t.start()
+
+    print(f"\n→ RM IP: {ip}, SLOT: {slot}, Please ENTER to skip")
+
+    start = time.time()
+
+    # Poll loop
+    while time.time() - start < timeout:
+        if result_holder["done"]:
+            return result_holder["success"]
+
+        # Non-blocking skip input
+        if sys.stdin in select.select([sys.stdin], [], [], 0)[0]:
+            _ = sys.stdin.readline()
+            print("⚠️  User requested skip")
+            return False
+
+        time.sleep(0.2)
+
+    print(f"⏳ Timeout ({timeout}s)")
+    return False
+
+def exec_rm_cmd(ip, cmd, extra=None):
+
+    ssh_cmd = [
+        "sshpass", "-p", SSH_PASSWORD, "ssh",
+        "-o", "StrictHostKeyChecking=no",
+        "-o", "UserKnownHostsFile=/dev/null",
+        f"root@{ip}",
+        cmd
+    ]
+
+    print(f"Command:", ssh_cmd)
+    print("   → Executing command... please wait...(This may take up to 90 seconds depending on RSCM load)")
+
+    try:
+        # Use Popen so we don't freeze
+        proc = subprocess.Popen(
+            ssh_cmd,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            text=True
+        )
+
+        full_output = ""
+
+        # Stream output line by line
+        for line in proc.stdout:
+            line = line.rstrip()
+            full_output += line + "\n"
+
+        proc.wait()  # ensure completion
+
+    except Exception as e:
+        print(f"   ❌ SSH execution failed: {e}")
+        return False
+
+    # Detect completion code
+    return "Completion Code: Success" in full_output, full_output
+
+def extract_board_serial(output):
+    for line in output.splitlines():
+        if "Board Serial" in line:
+            return line.split(":")[1].strip()
+    return None
+
+def gp_ping_ok(child, ip):
+    child.sendline(f"ping -c 1 -W 1 {ip}")
+    # Wait for the prompt again
+    child.expect(r"root@localhost:")
+    output = child.before  # everything before the prompt
+    # Check if '1 packets transmitted, 1 received' is in output
+    return "1 packets received" in output
+
+def gp_collect_keys(child, GP_SN):
+    KEYS_EXTRACTION_CMDS = [
+        f"mkdir /tmp/{GP_SN}",
+        f"cd /tmp/{GP_SN}",
+        f"cerberus_utility exportcsr {GP_SN}.CSR",
+        "ovb_lock token token.bin",
+        "cerberus_utility getcertchain 0"
+    ]
+
+    for cmd in KEYS_EXTRACTION_CMDS:
+        child.sendline(cmd)
+        child.expect(r"root@localhost:", timeout=30)
+        output = child.before.splitlines()[1:]
+        print("\n".join(output))
+
+def gp_login(ip, slot):
+    child = pexpect.spawn(
+        f"sshpass -p '$pl3nd1D' ssh -o StrictHostKeyChecking=no root@{ip}",
+        encoding="utf-8",
+        timeout=30
+    )
+
+    # Debug output (VERY helpful)
+    child.logfile = sys.stdout
+
+    # Wait for initial shell prompt
+    child.expect(r"#")
+
+    # Start serial session
+    child.sendline(f"start serial session -i {slot} -p 8295")
+
+    # 🔥 KEY FIX: don't expect wrong prompt
+    # Wait for either:
+    # - GP prompt
+    # - or still shell (fallback)
+    child.sendline("")  
+    child.expect(r"root@localhost:", timeout=30)
+
+    print("Entered GP Console")
+    return child
+
+def gp_exit(child):
+    # Exit safely
+    print("Exiting both GP card & RSCM")
+    child.send("~.")
+    child.expect(pexpect.EOF)
+    child.close()
+
+def gp_disable_firewall(child, ip, slot, public_key):
+    print("Disable Firewall")
+    # Example commands inside GP
+    # child.sendline("disable firewall")
+    # child.expect(r"GP>")
+    FIREWALL_DISABLE_CMDS = [
+        "setenforce 0",
+        "mkdir -p /run/ssh/keys/root",
+        f'printf "%s\n" "{public_key}" > /run/ssh/keys/root/authorized_keys',
+        "chmod 644 /run/ssh/keys/root/*",
+        "ov-firewall --disable"
+    ]
+    
+    for cmd in FIREWALL_DISABLE_CMDS:
+        child.sendline(cmd)
+        child.expect(r"root@localhost:", timeout=30)
+        output = child.before.splitlines()[1:]
+        print("\n".join(output))
+    
+
+    if gp_ping_ok(child, "10.0.3.254"):
+        print("Ping successful")
+    else:
+        print("Ping failed!")
+
+def main():
+    rm_mac = get_mac_from_file(MAC_FILE)
+    ip = find_ip(rm_mac)
+    cmd_succeed, rm_manager_info = exec_rm_cmd(ip, RSCM_SHOW_MANAGER_INFO)
+
+    # cmd_succeed = True                          # Delete later
+    # rm_manager_info = "TESTING"                 # Delete later
+
+    if cmd_succeed:
+        with open("/project/teto/UNLOCK_GP/id_rsa.pub", "r") as f:
+            PUBLIC_KEY = f.read().strip()
+
+        # print(PUBLIC_KEY)
+        print(rm_manager_info)
+        slots = get_server_slots(rm_manager_info)             # Uncomment later
+        # slots = [14]                             # Delete later
+        print("Sever slots at", rm_mac, "(", ip, ") :", slots)
+        gp_mac_list = ""
+        custom_boot = ""
+        server_list = []
+        failed_list = []
+
+        for slot in slots:
+            print("\n=== Processing slot", slot, "===")
+            success, output = exec_cmd(ip, slot, "gp_info", None)
+            if not success:
+                print(f"Failed to get GP info for slot {slot} at {ip}")
+                failed_list.append(slot)
+            else:
+                server_list.append(slot)
+                for line in output.splitlines():
+                    if "MacAddress:" in line:
+                        gp_mac_list += line + "\n"
+                        custom_boot += conv_mac_format(line) + "\n"
+
+        print("\n=== All GP info collected ===")
+        print(custom_boot)
+        print(server_list)
+
+        for bootimage in custom_boot.splitlines():
+            check_custom_bootimage(TFTPBOOT_DIRECTORY, bootimage)
+        
+        for server in server_list:
+            success, output = exec_cmd(ip, server, "boot_mode", "2")
+            if not success:
+                print(f"Failed to change Boot mode to PXE: slot{server}")
+                failed_list.append(server)
+
+            success, output = exec_cmd(ip, server, "reset", None)
+            if not success:
+                print(f"Failed to DC cycle slot {server}")
+                failed_list.append(server)
+
+        for server in server_list:
+            print("\n=== Processing slot", server, "===")
+            success, gp_fru_output = exec_cmd(ip, server, "cmd", "fru print 2")
+            if success:
+                GP_SN = extract_board_serial(gp_fru_output)
+                print(GP_SN)
+
+            gp_child = gp_login(ip, server)
+            gp_disable_firewall(gp_child, ip, server, PUBLIC_KEY)
+            gp_collect_keys(gp_child, GP_SN)
+            gp_exit(gp_child)
+            print("\n=== Completed slot", server, "===")
+        
+        print("\n=== Completed with all GPs ===")
+        print("\nFailed slots:", failed_list)
+
+    else:
+        print("Failed to get manager info from RM at", rm_mac, "-", ip)
+        return
+    
+if __name__ == "__main__":
+    main()
+
+
+
+==================
+
+Script thu 2:
+
+Script này là một chương trình Python dùng để thu thập các gói unlock từ các GP card trong hệ thống rack manager và sao chép chúng lên máy chủ PXE.
+
+Các bước chính mà script thực hiện:
+
+Đọc địa chỉ MAC của Rack Manager (RM): Từ file /project/teto/UNLOCK_GP/RM_MAC.txt.
+
+Tìm địa chỉ IP của RM: Sử dụng công cụ find_ip với MAC để lấy IP.
+
+Lấy danh sách các slot server: Chạy lệnh "show manager info" trên RM để xác định các slot có trạng thái "Server" và "Success".
+
+Xử lý từng slot:
+
+Chạy lệnh FRU để lấy serial number của GP card.
+Đăng nhập vào console GP qua SSH và phiên serial (port 8295).
+Kiểm tra thư mục /tmp/{GP_SN} trên GP card.
+Sao chép thư mục đó qua SCP lên máy chủ PXE (192.168.202.50) vào thư mục đích duy nhất được tạo dựa trên ngày tháng.
+Báo cáo kết quả: Liệt kê các slot thành công và thất bại, cùng lý do thất bại.
+
+Script sử dụng SSH với mật khẩu cố định, pexpect để xử lý phiên tương tác, và subprocess để chạy lệnh. Nó tự động tạo thư mục đích trên PXE với tên duy nhất (ví dụ: "April19_unlock") và in ra tên thư mục cuối cùng.
+
+#!/usr/bin/env python3
+#SCP GP CARD SN FOLDER TO PXE
+import os
+import re
+import subprocess
+import sys
+import time
+from datetime import datetime
+
+import pexpect
+
+MAC_FILE = "/project/teto/UNLOCK_GP/RM_MAC.txt"
+SSH_PASSWORD = "$pl3nd1D"
+FIND_IP = "/usr/local/bin/find_ip"
+
+PXE_USER = "qsitoan"
+PXE_IP = "192.168.202.50"
+BASE_DIR = "/home/qsitoan"
+
+
+def run(cmd):
+    try:
+        return subprocess.check_output(
+            cmd,
+            stderr=subprocess.STDOUT,
+            shell=True,
+            universal_newlines=True
+        )
+    except subprocess.CalledProcessError as exc:
+        return exc.output if exc.output else ""
+
+
+def get_mac_from_file(filepath):
+    with open(filepath, "r") as f:
+        return f.read().strip()
+
+
+def find_ip(mac):
+    output = run("%s %s" % (FIND_IP, mac))
+    m = re.search(r"(\d+\.\d+\.\d+\.\d+)", output)
+    if m:
+        return m.group(1)
+    return None
+
+
+def exec_rm_cmd(ip, cmd):
+    ssh_cmd = [
+        "sshpass", "-p", SSH_PASSWORD, "ssh",
+        "-o", "StrictHostKeyChecking=no",
+        "-o", "UserKnownHostsFile=/dev/null",
+        "root@%s" % ip,
+        cmd
+    ]
+
+    try:
+        proc = subprocess.Popen(
+            ssh_cmd,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            universal_newlines=True
+        )
+
+        full_output = ""
+        for line in proc.stdout:
+            full_output += line
+
+        proc.wait()
+        return ("Completion Code: Success" in full_output, full_output)
+
+    except Exception as e:
+        return (False, "SSH execution failed: %s" % e)
+
+
+def exec_cmd(ip, cmd):
+    ssh_cmd = [
+        "sshpass", "-p", SSH_PASSWORD, "ssh",
+        "-o", "StrictHostKeyChecking=no",
+        "-o", "UserKnownHostsFile=/dev/null",
+        "root@%s" % ip,
+        cmd
+    ]
+
+    try:
+        proc = subprocess.Popen(
+            ssh_cmd,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            universal_newlines=True
+        )
+
+        full_output = ""
+        for line in proc.stdout:
+            full_output += line
+
+        proc.wait()
+        return ("Completion Code: Success" in full_output, full_output)
+
+    except Exception as e:
+        return (False, "SSH execution failed: %s" % e)
+
+
+def get_server_slots(manager_info):
+    slots = []
+
+    for line in manager_info.splitlines():
+        line = line.strip()
+
+        if not line.startswith("|"):
+            continue
+        if "Port State" in line:
+            continue
+
+        parts = [p.strip() for p in line.split("|") if p.strip()]
+
+        if len(parts) < 7:
+            continue
+
+        slot = parts[0]
+        port_type = parts[3]
+        completion_code = parts[6]
+
+        if port_type == "Server" and completion_code == "Success":
+            try:
+                slots.append(int(slot))
+            except ValueError:
+                pass
+
+    return slots
+
+
+def extract_board_serial(output):
+    for line in output.splitlines():
+        if "Board Serial" in line:
+            return line.split(":", 1)[1].strip()
+    return None
+
+
+def get_unique_unlock_folder(base_dir, base_name):
+    candidate = os.path.join(base_dir, base_name)
+    count = 1
+
+    while os.path.exists(candidate):
+        count += 1
+        candidate = os.path.join(base_dir, "%s_%s" % (base_name, count))
+
+    os.makedirs(candidate)
+    return candidate
+
+
+def gp_login(ip, slot):
+    print("Opening SSH to RM %s for slot %s" % (ip, slot))
+
+    child = pexpect.spawn(
+        "sshpass -p '%s' ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null root@%s" % (SSH_PASSWORD, ip),
+        encoding="utf-8",
+        timeout=60
+    )
+
+    child.logfile = sys.stdout
+
+    try:
+        child.expect(r"#", timeout=30)
+    except Exception:
+        print("can't login to RM on slot %s" % slot)
+        try:
+            child.close()
+        except Exception:
+            pass
+        return None
+
+    print("Starting serial session on slot %s port 8295" % slot)
+    child.sendline("start serial session -i %s -p 8295" % slot)
+
+    time.sleep(2)
+    child.sendline("")
+
+    try:
+        child.expect(r"root@localhost:", timeout=60)
+    except Exception:
+        print("can't login to 8295 on slot %s" % slot)
+        try:
+            child.close()
+        except Exception:
+            pass
+        return None
+
+    print("Entered GP Console for slot %s" % slot)
+    return child
+
+
+def gp_exit(child):
+    try:
+        child.send("~.")
+        child.expect(pexpect.EOF, timeout=10)
+    except Exception:
+        pass
+    try:
+        child.close()
+    except Exception:
+        pass
+
+
+def gp_check_folder(child, gp_sn, slot):
+    print("Checking GP folder: /tmp/%s" % gp_sn)
+    child.sendline("ls /tmp/%s" % gp_sn)
+
+    try:
+        child.expect(r"root@localhost:", timeout=20)
+    except Exception:
+        print("can't see slot %s" % slot)
+        return False
+
+    output = child.before
+
+    if "No such file" in output:
+        print("can't see slot %s" % slot)
+        return False
+
+    return True
+
+
+def gp_scp_folder_to_pxe(child, gp_sn, dest_dir, pxe_password):
+    src = "/tmp/%s" % gp_sn
+    dest = "%s@%s:%s/" % (PXE_USER, PXE_IP, dest_dir)
+
+    cmd = "scp -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -r %s %s" % (src, dest)
+
+    print("Running SCP from GP CARD to PXE")
+    print(cmd)
+
+    child.sendline(cmd)
+
+    password_count = 0
+
+    while True:
+        idx = child.expect(
+            [
+                r"yes/no",
+                r"[Pp]assword:",
+                r"root@localhost:",
+                pexpect.TIMEOUT,
+                pexpect.EOF
+            ],
+            timeout=120
+        )
+
+        if idx == 0:
+            print("SSH asking yes/no, sending yes")
+            child.sendline("yes")
+            continue
+
+        if idx == 1:
+            password_count += 1
+            print("SCP asking PXE password, sending password attempt %s" % password_count)
+            child.sendline(pxe_password)
+            continue
+
+        if idx == 2:
+            print("Back to GP prompt after SCP")
+            break
+
+        if idx == 3:
+            print("SCP timeout for %s" % gp_sn)
+            return False
+
+        if idx == 4:
+            print("SCP EOF for %s" % gp_sn)
+            return False
+
+    copied_path = os.path.join(dest_dir, gp_sn)
+    if os.path.isdir(copied_path):
+        print("Verified copied folder exists on PXE: %s" % copied_path)
+        return True
+
+    print("Copied folder not found on PXE: %s" % copied_path)
+    return False
+
+
+def main():
+    if len(sys.argv) < 2:
+        print("Usage: python3 collect_unlock_pkgs.py <PXE_PASSWORD>")
+        sys.exit(1)
+
+    pxe_password = sys.argv[1]
+
+    print("Reading RM MAC from %s" % MAC_FILE)
+    rack_mac = get_mac_from_file(MAC_FILE)
+    print("Using RM MAC: %s" % rack_mac)
+
+    print("Finding RM IP...")
+    rm_ip = find_ip(rack_mac)
+    if not rm_ip:
+        print("Failed to find RM IP from RM_MAC.txt")
+        sys.exit(1)
+
+    print("RM IP: %s" % rm_ip)
+
+    now = datetime.now()
+    today_base = now.strftime("%B") + str(now.day) + "_unlock"
+
+    print("Creating destination folder on PXE...")
+    dest_dir = get_unique_unlock_folder(BASE_DIR, today_base)
+    final_name = os.path.basename(dest_dir)
+
+    print("Ready folder: %s" % dest_dir)
+    print("FINAL_UNLOCK_FOLDER_NAME=%s" % final_name)
+
+    print("Running show manager info...")
+    ok, manager_info = exec_rm_cmd(rm_ip, "show manager info")
+    print("show manager info finished")
+
+    if not ok:
+        print("Failed to retrieve manager info from rack manager")
+        print(manager_info)
+        sys.exit(1)
+
+    slots = get_server_slots(manager_info)
+    print("Server slots at %s (%s): %s" % (rack_mac, rm_ip, slots))
+
+    if len(slots) == 0:
+        print("No valid slots found from show manager info")
+        sys.exit(1)
+
+    successes = []
+    failures = []
+
+    total = len(slots)
+    index = 0
+
+    for slot in slots:
+        index += 1
+        print("\n==============================")
+        print("[%s/%s] Processing slot %s" % (index, total, slot))
+        print("==============================")
+
+        fru_cmd = "set system cmd -i %s -c 'fru print 2'" % slot
+        print("Running FRU command on slot %s" % slot)
+        ok, fru_output = exec_cmd(rm_ip, fru_cmd)
+
+        if not ok:
+            print("FRU command failed for slot %s" % slot)
+            print(fru_output)
+            failures.append((slot, "FRU command failed"))
+            continue
+
+        gp_sn = extract_board_serial(fru_output)
+        if not gp_sn:
+            print("Could not extract serial for slot %s" % slot)
+            print(fru_output)
+            failures.append((slot, "No serial"))
+            continue
+
+        print("GP SN: %s" % gp_sn)
+
+        child = None
+        try:
+            child = gp_login(rm_ip, slot)
+            if child is None:
+                failures.append((slot, "can't login to 8295"))
+                continue
+
+            folder_exists = gp_check_folder(child, gp_sn, slot)
+            if not folder_exists:
+                failures.append((slot, "can't see slot %s" % slot))
+                continue
+
+            copied_ok = gp_scp_folder_to_pxe(child, gp_sn, dest_dir, pxe_password)
+            if copied_ok:
+                successes.append((slot, gp_sn))
+                print("Copied %s to %s" % (gp_sn, dest_dir))
+            else:
+                failures.append((slot, "SCP failed for %s" % gp_sn))
+
+        except Exception as e:
+            print("Exception on slot %s: %s" % (slot, e))
+            failures.append((slot, "Exception: %s" % e))
+
+        finally:
+            if child is not None:
+                gp_exit(child)
+
+    print("\nFinished collecting unlock packages")
+    print("Destination folder: %s" % dest_dir)
+    print("FINAL_UNLOCK_FOLDER_NAME=%s" % final_name)
+
+    print("Successful: %s" % len(successes))
+    for slot, sn in successes:
+        print("  slot %s: %s" % (slot, sn))
+
+    print("Failed: %s" % len(failures))
+    for slot, reason in failures:
+        print("  slot %s: %s" % (slot, reason))
+
+
+if __name__ == "__main__":
+    main()
+
+
+
+=========
+
+
